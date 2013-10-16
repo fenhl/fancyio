@@ -1,4 +1,33 @@
-fancyio
+**fancyio** creates fancy terminal input/output in Python 3.
+
+Requirements
+============
+
+*   Python 3.3
+*   [blessings][] 1.6 — must be run through `2to3` first
+
+Example
 =======
 
-Creates fancy terminal input/output in Python
+Basic output:
+
+```Python
+with fancyio.IO() as io: # Create a new IO object. The with statement prints a newline after the last line on exit.
+    print = io.print # Make print point to the IO object's convenience method instead of the built-in function.
+    print('Hello, world!')
+```
+
+Editing the lines:
+
+```Python
+with fancyio.IO() as io:
+    io.print('foo') # Add a line saying “foo”
+    fancyio.StringLine(io, 'bar') # Same but with “bar”
+    del io[0] # Delete the “foo” line
+    io.insert(0, fancyio.StringLine(None, 'baz')) # Create a new StringLine which is not associated with the io object, and insert it.
+    io.lines = [fancyio.StringLine(None, 'foobar')] + io.lines # Same, but by manually editing the list of lines.
+    io.update() # Since we manually edited io.lines, we need to call update.
+    io.clear() # Delete all lines
+```
+
+[blessings]: https://github.com/erikrose/blessings (github: erikrose: blessings)
