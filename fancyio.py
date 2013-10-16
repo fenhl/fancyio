@@ -38,12 +38,15 @@ class IO:
             terminal = blessings.Terminal()
         self.terminal = terminal
         self.lines = []
+        self.max_lines = 1
         self.position = 0
     
     def __contains__(self, item):
         return item in self.lines
     
     def __delitem__(self, key):
+        if key < self.max_lines - self.terminal.height:
+            raise IndexError('Line has scrolled out of screen')
         del self.lines[key]
         self.update()
     
@@ -93,12 +96,16 @@ class IO:
         StringLine(self, message=sep.join(str(arg) for arg in args))
     
     def update(self):
+        self.max_lines = max(self.max_lines, len(self))
+        starting_line = 0
+        if self.max_lines > self.terminal.height:
+            starting_line = self.max_lines - self.terminal.height
         prev_position = self.position
-        while self.position > 0:
+        while self.position > starting_line:
             print(self.terminal.move_up, end='', flush=True)
             self.position -= 1
-        if len(self):
-            for line in self.lines[:-1]:
+        if len(self) > starting_line:
+            for line in self.lines[starting_line:-1]:
                 line.io = self
                 line.draw()
                 print(flush=True)
