@@ -115,7 +115,6 @@ class TaskLine(PrefixLine):
                 state = self.thread.state
             except AttributeError:
                 state = None
-        self.prefix_formatter = lambda x: x
         if state is None:
             fifths = int(progress * 5)
             if fifths > 4:
