@@ -6,8 +6,8 @@ Requirements
 *   Python 3.3
 *   [blessings][] 1.6 — must be run through `2to3` first
 
-Example
-=======
+Examples
+========
 
 Basic output:
 
@@ -28,6 +28,15 @@ with fancyio.IO() as io:
     io.lines = [fancyio.StringLine(None, 'foobar')] + io.lines # Same, but by manually editing the list of lines.
     io.update() # Since we manually edited io.lines, we need to call update.
     io.clear() # Delete all lines
+```
+
+Tasks:
+
+```Python
+import time
+
+with fancyio.IO() as io:
+    io.do(time.sleep, args=[2], message='waiting for 2 secs') # Displays an ellipsis, which changes to “ok” after the function is done.
 ```
 
 [blessings]: https://github.com/erikrose/blessings (github: erikrose: blessings)
