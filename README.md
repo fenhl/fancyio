@@ -1,6 +1,6 @@
 **fancyio** creates fancy terminal input/output in Python 3, in the style of programs like Debian lsb (think `init`) or ZNC.
 
-This is `fancyio` version 0.1.0 ([semver][]).
+This is `fancyio` version 0.2.0 ([semver][]).
 
 Requirements
 ============

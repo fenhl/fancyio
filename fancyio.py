@@ -4,7 +4,7 @@ import threading
 import time
 import tty
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 
 def _getch():
     fd = sys.stdin.fileno()
@@ -82,24 +82,28 @@ class PrefixLine(StringLine):
         elif self.io.terminal.width < 10:
             print(self.io.terminal.move_x(0) + self.message[:self.io.terminal.width - 3], end=self.io.terminal.black_on_cyan('...'), flush=True)
         elif len(self.message) + 7 > self.io.terminal.width:
-            print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message[:self.io.terminal.width - 10], end=self.io.terminal.black_on_cyan('...'), flush=True)
+            print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message[:self.io.terminal.width - 10], end=self.io.terminal.black_on_cyan('...'), flush=True)
         elif len(self.message) + 7 == self.io.terminal.width:
-            print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message, end='', flush=True)
+            print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message, end='', flush=True)
         else:
-            print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message + self.io.terminal.clear_eol, end='', flush=True)
+            print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message + self.io.terminal.clear_eol, end='', flush=True)
         
     def formatted_prefix(self):
+        interactive = self.is_interactive()
+        ret = self.io.terminal.bold('[') if interactive else '['
         if self.prefix_color is not None and self.io is not None:
-            return getattr(self.io.terminal, self.prefix_color)(self.prefix[:4])
+            ret += getattr(self.io.terminal, self.prefix_color)(self.prefix[:4])
         else:
-            return self.prefix[:4]
+            ret += self.prefix[:4]
+        ret += self.io.terminal.bold(']') if interactive else ']'
+        return ret + ' '
 
 class InputLine(PrefixLine):
     def __init__(self, io, message='', prefix='????', prefix_color='yellow'):
         self.answer = ''
         self.position = 0
-        super().__init__(io, message=message, prefix=prefix, prefix_color=prefix_color)
         self.submitted = False
+        super().__init__(io, message=message, prefix=prefix, prefix_color=prefix_color)
     
     def activate(self):
         if self.io is None or self.submitted:
@@ -177,22 +181,22 @@ class InputLine(PrefixLine):
                     end_of_answer = self.message[-self.io.terminal.width + len(self.answer) + 11:] + self.io.terminal.bold(self.answer)
                 else:
                     end_of_answer = self.io.terminal.bold(self.answer[-self.io.terminal.width + 11:])
-                print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.io.terminal.black_on_cyan('...') + end_of_answer + ' ' + self.io.terminal.move_x(self.io.terminal.width - 1 - len(self.answer) + self.position), end='', flush=True)
+                print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.io.terminal.black_on_cyan('...') + end_of_answer + ' ' + self.io.terminal.move_x(self.io.terminal.width - 1 - len(self.answer) + self.position), end='', flush=True)
             else:
                 section = (len(self.message) + self.position - 3) // (self.io.terminal.width - 13)
                 if section <= 0:
-                    print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message + self.io.terminal.bold(self.answer[:self.io.terminal.width - len(self.message) - 10]) + self.io.terminal.black_on_cyan('...') + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
+                    print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message + self.io.terminal.bold(self.answer[:self.io.terminal.width - len(self.message) - 10]) + self.io.terminal.black_on_cyan('...') + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
                 else:
                     if len(self.message) > 3 + section * (self.io.terminal.width - 13):
                         partial_message = self.message[3 + section * (self.io.terminal.width - 13):]
                         partial_answer = partial_message + self.io.terminal.bold(self.answer[:self.io.terminal.width - len(partial_message) - 13])
                     else:
                         partial_answer = self.io.terminal.bold(self.answer[section * (self.io.terminal.width - 13) - len(self.message) + 3:][:self.io.terminal.width - 13])
-                    print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.io.terminal.black_on_cyan('...') + partial_answer + self.io.terminal.black_on_cyan('...') + self.io.terminal.move_x(7 + len(self.message) + self.position - section * (self.io.terminal.width - 13)), end='', flush=True)
+                    print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.io.terminal.black_on_cyan('...') + partial_answer + self.io.terminal.black_on_cyan('...') + self.io.terminal.move_x(7 + len(self.message) + self.position - section * (self.io.terminal.width - 13)), end='', flush=True)
         elif len(self.message) + len(self.answer) + 8 == self.io.terminal.width: # line fits exactly on screen
-            print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message + self.io.terminal.bold(self.answer) + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
+            print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message + self.io.terminal.bold(self.answer) + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
         else:
-            print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message + self.io.terminal.bold(self.answer) + self.io.terminal.clear_eol + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
+            print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message + self.io.terminal.bold(self.answer) + self.io.terminal.clear_eol + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
         
     def is_interactive(self):
         return not self.submitted
@@ -221,7 +225,11 @@ class TaskLine(PrefixLine):
         super().draw()
     
     def formatted_prefix(self):
-        return self.prefix_formatter(self.prefix)
+        interactive = self.is_interactive()
+        ret = self.io.terminal.bold('[') if interactive else '['
+        ret += self.prefix_formatter(self.prefix)
+        ret += self.io.terminal.bold(']') if interactive else ']'
+        return ret + ' '
     
     def join(self, update_interval=0.1):
         while self.thread.is_alive():
