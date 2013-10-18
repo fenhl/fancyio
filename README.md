@@ -1,4 +1,6 @@
-**fancyio** creates fancy terminal input/output in Python 3.
+**fancyio** creates fancy terminal input/output in Python 3, in the style of programs like Debian lsb (think `init`) or ZNC.
+
+This is `fancyio` version 0.1.0 ([semver][]).
 
 Requirements
 ============
@@ -40,3 +42,4 @@ with fancyio.IO() as io:
 ```
 
 [blessings]: https://github.com/erikrose/blessings (github: erikrose: blessings)
+[semver]: http://semver.org/ (Semantic Versioning 2.0.0)

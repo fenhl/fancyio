@@ -1,5 +1,20 @@
+import sys
+import termios
 import threading
 import time
+import tty
+
+__version__ = '0.1.0'
+
+def _getch():
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        while True:
+            yield sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 class Line:
     """An empty line. Base class for other types of line.
@@ -9,12 +24,24 @@ class Line:
         if self.io is not None:
             self.io.append(self)
     
+    def activate(self):
+        """Pass control to the line. By default, lines return immediately. Subclasses may read input or do other things instead.
+        """
+        pass
+    
     def draw(self):
         """Draw the line's content into the line where the cursor is currently positioned.
         """
         if self.io is None:
             return
         print(self.io.terminal.move_x(0) + self.io.terminal.clear_eol, end='', flush=True)
+    
+    def is_interactive(self):
+        """Returns a boolean representing whether or not this line has an interactive mode.
+        
+        If this returns False, the line will be skipped when moving up or down using the arrow keys.
+        """
+        return False
 
 class StringLine(Line):
     """A line of formatted text.
@@ -66,6 +93,120 @@ class PrefixLine(StringLine):
             return getattr(self.io.terminal, self.prefix_color)(self.prefix[:4])
         else:
             return self.prefix[:4]
+
+class InputLine(PrefixLine):
+    def __init__(self, io, message='', prefix='????', prefix_color='yellow'):
+        self.answer = ''
+        self.position = 0
+        super().__init__(io, message=message, prefix=prefix, prefix_color=prefix_color)
+        self.submitted = False
+    
+    def activate(self):
+        if self.io is None or self.submitted:
+            return
+        self.io.update()
+        sequence = ''
+        for ch in self.io._getch:
+            if sequence == '\x1b':
+                if ch == '[':
+                    sequence += ch
+                else:
+                    self.answer = self.answer[:self.position] + sequence + ch + self.answer[self.position:]
+                    self.position += 2
+                    sequence = ''
+            elif sequence == '\x1b[':
+                if ch == 'A': # up arrow
+                    if not self.io.activate_up():
+                        print('\x07', end='', flush=True)
+                    sequence = ''
+                    self.io.update()
+                elif ch == 'B': # down arrow
+                    if not self.io.activate_down():
+                        print('\x07', end='', flush=True)
+                    sequence = ''
+                    self.io.update()
+                elif ch == 'C': # right arrow
+                    if self.position >= len(self.answer):
+                        print('\x07', end='', flush=True)
+                        sequence = ''
+                    else:
+                        self.position += 1
+                        sequence = ''
+                        self.io.update()
+                elif ch == 'D': # left arrow
+                    if self.position <= 0:
+                        print('\x07', end='', flush=True)
+                        sequence = ''
+                    else:
+                        self.position -= 1
+                        sequence = ''
+                        self.io.update()
+                else:
+                    self.answer = self.answer[:self.position] + sequence + ch + self.answer[self.position:]
+                    self.position += 3
+                    sequence = ''
+                    self.io.update()
+            else:
+                sequence = ''
+                if ch in ['\r', '\n', '\x03', '\x04']:
+                    self.submitted = True
+                    self.io.update()
+                    return
+                elif ch == '\x7f':
+                    if self.position <= 0:
+                        print('\x07', end='', flush=True)
+                    else:
+                        self.answer = self.answer[:self.position - 1] + self.answer[self.position:]
+                        self.position -= 1
+                        self.io.update()
+                elif ch == '\x1b':
+                    sequence += ch
+                else:
+                    self.answer = self.answer[:self.position] + ch + self.answer[self.position:]
+                    self.position += 1
+                    self.io.update()
+    
+    def draw(self):
+        if self.io.terminal.width < 3:
+            print(self.io.terminal.move_x(0) + self.io.terminal.clear_eol, end='', flush=True)
+        elif self.io.terminal.width < 14:
+            print(self.io.terminal.move_x(0) + self.answer[:self.io.terminal.width - 3], end=self.io.terminal.black_on_cyan('...'), flush=True)
+        elif len(self.message) + len(self.answer) + 8 > self.io.terminal.width: # line does not fit on screen
+            if self.position != 0 and len(self.answer) - self.position + 11 < self.io.terminal.width: # display the end of the answer
+                if len(self.answer) + 11 < self.io.terminal.width:
+                    end_of_answer = self.message[-self.io.terminal.width + len(self.answer) + 11:] + self.io.terminal.bold(self.answer)
+                else:
+                    end_of_answer = self.io.terminal.bold(self.answer[-self.io.terminal.width + 11:])
+                print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.io.terminal.black_on_cyan('...') + end_of_answer + ' ' + self.io.terminal.move_x(self.io.terminal.width - 1 - len(self.answer) + self.position), end='', flush=True)
+            else:
+                section = (len(self.message) + self.position - 3) // (self.io.terminal.width - 13)
+                if section <= 0:
+                    print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message + self.io.terminal.bold(self.answer[:self.io.terminal.width - len(self.message) - 10]) + self.io.terminal.black_on_cyan('...') + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
+                else:
+                    if len(self.message) > 3 + section * (self.io.terminal.width - 13):
+                        partial_message = self.message[3 + section * (self.io.terminal.width - 13):]
+                        partial_answer = partial_message + self.io.terminal.bold(self.answer[:self.io.terminal.width - len(partial_message) - 13])
+                    else:
+                        partial_answer = self.io.terminal.bold(self.answer[section * (self.io.terminal.width - 13) - len(self.message) + 3:][:self.io.terminal.width - 13])
+                    print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.io.terminal.black_on_cyan('...') + partial_answer + self.io.terminal.black_on_cyan('...') + self.io.terminal.move_x(7 + len(self.message) + self.position - section * (self.io.terminal.width - 13)), end='', flush=True)
+        elif len(self.message) + len(self.answer) + 8 == self.io.terminal.width: # line fits exactly on screen
+            print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message + self.io.terminal.bold(self.answer) + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
+        else:
+            print(self.io.terminal.move_x(0) + '[' + self.formatted_prefix() + '] ' + self.message + self.io.terminal.bold(self.answer) + self.io.terminal.clear_eol + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
+        
+    def is_interactive(self):
+        return not self.submitted
+    
+    def join(self, update_interval=0.1):
+        """Blocks until input has been submitted, then returns that input.
+        """
+        while not self.submitted:
+            if self.io.active_line is None:
+                self.io.activate(self)
+            else:
+                self.io.update()
+                time.sleep(update_interval)
+        return self.answer
 
 class TaskLine(PrefixLine):
     def __init__(self, io, thread, message=''):
@@ -137,7 +278,9 @@ class IO:
         self.lines = []
         self.max_lines = 1
         self.position = 0
+        self.active_line = None
         self.update_lock = threading.Lock()
+        self._getch = None
     
     def __contains__(self, item):
         return item in self.lines
@@ -149,14 +292,18 @@ class IO:
         self.update()
     
     def __enter__(self):
+        self._getch = _getch()
         return self
     
     def __exit__(self, exception_type, exception_val, trace):
         """Update everything and print a newline after the last line
         """
+        self.active_line = None
         self.update()
+        print(self.terminal.move_x(0), end='', flush=True)
         if len(self):
             print(flush=True)
+        del self._getch
         return exception_type is None # re-raise any exceptions
     
     def __getitem__(self, key):
@@ -171,6 +318,31 @@ class IO:
     def __setitem__(self, key, value):
         self.lines[key] = value
         self.update()
+    
+    def activate(self, line):
+        if (line is None) or (line in self):
+            self.active_line = line
+            self.update()
+            if line is not None:
+                if line.is_interactive():
+                    line.activate()
+                self.activate(None)
+        else:
+            raise ValueError()
+    
+    def activate_down(self):
+        for line in (self.lines if self.active_line is None else self.lines[self.index(self.active_line) + 1:]):
+            if line.is_interactive():
+                self.activate(line)
+                return True
+        return False
+    
+    def activate_up(self):
+        for line in reversed(self.lines if self.active_line is None else self.lines[:self.index(self.active_line)]):
+            if line.is_interactive():
+                self.activate(line)
+                return True
+        return False
     
     def append(self, line):
         self.lines.append(line)
@@ -191,13 +363,40 @@ class IO:
         line = TaskLine(self, thread=thread, message=message)
         line.start()
         if block:
+            self.activate(line)
             line.join(update_interval=update_interval)
         else:
             threading.Thread(target=line.join, kwargs={'update_interval': update_interval}).start()
     
+    def getch(self):
+        return next(self._getch)
+    
+    def index(self, line):
+        return self.lines.index(line)
+    
+    def input(self, prompt=''):
+        """Display the prompt and listen for newline-terminated input on stdin.
+        """
+        line = InputLine(self, message=prompt)
+        self.activate(line)
+        return line.join()
+    
     def insert(self, position, line):
         self.lines.insert(position, line)
         self.update()
+    
+    def move_down(self):
+        print(flush=True)
+        self.position += 1
+        if self.position == self.max_lines:
+            self.max_lines += 1
+    
+    def move_up(self):
+        if self.position <= 0 or self.max_lines - self.position >= self.terminal.height:
+            raise IndexError()
+        else:
+            self.position -= 1
+            print(self.terminal.move_up, end='', flush=True)
     
     def print(self, *args, sep=' ', end='\n', file=None, flush=False):
         """Print the values to a new StringLine after the existing lines.
@@ -212,18 +411,18 @@ class IO:
             starting_line = 0
             if self.max_lines > self.terminal.height:
                 starting_line = self.max_lines - self.terminal.height
-            prev_position = self.position
             while self.position > starting_line:
-                print(self.terminal.move_up, end='', flush=True)
-                self.position -= 1
+                self.move_up()
             if len(self) > starting_line:
                 for line in self.lines[starting_line:-1]:
                     line.io = self
                     line.draw()
-                    print(flush=True)
-                    self.position += 1
+                    self.move_down()
                 self.lines[-1].draw()
             else:
                 print(self.terminal.move_x(0) + self.terminal.clear_eol, end='', flush=True)
-            if self.position < prev_position:
+            if self.position < self.max_lines - 1:
                 print(self.terminal.move_down + self.terminal.move_x(0) + self.terminal.clear_eos + self.terminal.move_up, end='', flush=True)
+            if self.active_line is not None and self.active_line in self:
+                while self.position > self.index(self.active_line):
+                    self.move_up()
