@@ -1,6 +1,6 @@
 **fancyio** creates fancy terminal input/output in Python 3, in the style of programs like Debian lsb (think `init`) or ZNC.
 
-This is `fancyio` version 0.2.0 ([semver][]).
+This is `fancyio` version 0.3.0 ([semver][]).
 
 Requirements
 ============
@@ -11,12 +11,14 @@ Requirements
 Examples
 ========
 
-Basic output:
+Basic input and output:
 
 ```Python
 with fancyio.IO() as io: # Create a new IO object. The with statement prints a newline after the last line on exit.
     print = io.print # Make print point to the IO object's convenience method instead of the built-in function.
+    input = io.input # Same but for “input”
     print('Hello, world!')
+    print(input('CRUISE CONTROL ').upper()) # get some input, then print the uppercased string to a new line
 ```
 
 Editing the lines:

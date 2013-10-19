@@ -4,7 +4,7 @@ import threading
 import time
 import tty
 
-__version__ = '0.2.0'
+__version__ = '0.3.0'
 
 def _getch():
     fd = sys.stdin.fileno()
@@ -111,6 +111,8 @@ class InputLine(PrefixLine):
         self.io.update()
         sequence = ''
         for ch in self.io._getch:
+            if self.io is None or self.submitted:
+                return
             if sequence == '\x1b':
                 if ch == '[':
                     sequence += ch
@@ -169,6 +171,8 @@ class InputLine(PrefixLine):
                     self.answer = self.answer[:self.position] + ch + self.answer[self.position:]
                     self.position += 1
                     self.io.update()
+            if self.io is None or self.submitted:
+                return
     
     def draw(self):
         if self.io.terminal.width < 3:
@@ -339,16 +343,20 @@ class IO:
             raise ValueError()
     
     def activate_down(self):
+        prev_active_line = self.active_line
         for line in (self.lines if self.active_line is None else self.lines[self.index(self.active_line) + 1:]):
             if line.is_interactive():
                 self.activate(line)
+                self.active_line = prev_active_line
                 return True
         return False
     
     def activate_up(self):
+        prev_active_line = self.active_line
         for line in reversed(self.lines if self.active_line is None else self.lines[:self.index(self.active_line)]):
             if line.is_interactive():
                 self.activate(line)
+                self.active_line = prev_active_line
                 return True
         return False
     
