@@ -4,7 +4,7 @@ import threading
 import time
 import tty
 
-__version__ = '0.3.0'
+__version__ = '0.4.0'
 
 def _getch():
     fd = sys.stdin.fileno()
@@ -390,10 +390,10 @@ class IO:
     def index(self, line):
         return self.lines.index(line)
     
-    def input(self, prompt=''):
+    def input(self, prompt='', prefix='????'):
         """Display the prompt and listen for newline-terminated input on stdin.
         """
-        line = InputLine(self, message=prompt)
+        line = InputLine(self, message=prompt, prefix=prefix)
         self.activate(line)
         return line.join()
     
@@ -414,12 +414,12 @@ class IO:
             self.position -= 1
             print(self.terminal.move_up, end='', flush=True)
     
-    def print(self, *args, sep=' ', end='\n', file=None, flush=False):
+    def print(self, *args, sep=' ', end='\n', file=None, flush=False, prefix='**'):
         """Print the values to a new StringLine after the existing lines.
         
-        Designed to be compatible with the built-in function "print". However, all keyword arguments other than "sep" are ignored.
+        Designed to be compatible with the built-in function "print". However, all keyword arguments other than "sep" and "prefix" are ignored.
         """
-        PrefixLine(self, message=sep.join(str(arg) for arg in args))
+        PrefixLine(self, message=sep.join(str(arg) for arg in args), prefix=prefix)
     
     def update(self):
         with self.update_lock:
