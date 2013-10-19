@@ -434,3 +434,4 @@ class IO:
             if self.active_line is not None and self.active_line in self:
                 while self.position > self.index(self.active_line):
                     self.move_up()
+                self.active_line.draw()
