@@ -1,10 +1,13 @@
+from datetime import date
+from datetime import datetime
 import sys
 import termios
 import threading
 import time
+from datetime import timedelta
 import tty
 
-__version__ = '0.4.0'
+__version__ = '0.5.0'
 
 def _getch():
     fd = sys.stdin.fileno()
@@ -236,6 +239,10 @@ class TaskLine(PrefixLine):
         return ret + ' '
     
     def join(self, update_interval=0.1):
+        try:
+            self.thread.start()
+        except RuntimeError:
+            pass # thread is already running
         while self.thread.is_alive():
             if self.io is not None:
                 self.io.update()
@@ -280,6 +287,51 @@ class TaskLine(PrefixLine):
                 self.prefix = '=' * fifths + '.' * (4 - fifths)
         else:
             self.prefix = state
+
+class SleepLine(TaskLine):
+    def __init__(self, io, end, message=None):
+        class SleepThread(threading.Thread):
+            def __init__(self, delta):
+                self.delta = delta.total_seconds()
+                self.progress = 0.0
+                self.state = None
+                super().__init__()
+            
+            def run(self):
+                if self.delta <= 0:
+                    self.progress = 1.0
+                    return
+                for progress in range(5):
+                    time.sleep(self.delta / 5)
+                    self.progress = (progress + 1) / 5
+        
+        if isinstance(end, datetime):
+            # sleep until datetime
+            thread = SleepThread(delta=(end - datetime.utcnow()))
+            if message is None:
+                if end.date() == date.today():
+                    date_string = end.strftime('%H:%M:%S')
+                else:
+                    date_string = end.strftime('%Y-%m-%d %H:%M:%S')
+                message = 'sleeping until ' + date_string
+        else:
+            # sleep for time interval
+            if not isinstance(end, timedelta):
+                end = timedelta(seconds=end)
+            thread = SleepThread(delta=end)
+            if message is None:
+                if end.total_seconds() >= 86400:
+                    date_string = str(end.total_seconds() // 86400) + ' days'
+                elif end.total_seconds() >= 3600:
+                    date_string = str(end.total_seconds() // 3600) + ' hours'
+                elif end.total_seconds() >= 60:
+                    date_string = str(end.total_seconds() // 60) + ' minutes'
+                elif end.total_seconds() >= 1:
+                    date_string = str(int(end.total_seconds())) + ' seconds'
+                else:
+                    date_string = str(int(end.total_seconds() * 1000)) + ' milliseconds'
+                message = 'sleeping for ' + date_string
+        super().__init__(io, thread=thread, message=message)
 
 class IO:
     def __init__(self, terminal=None):
