@@ -1,10 +1,9 @@
-from datetime import date
-from datetime import datetime
 import sys
+
+import datetime
 import termios
 import threading
 import time
-from datetime import timedelta
 import tty
 
 __version__ = '0.5.0'
@@ -26,22 +25,22 @@ class Line:
         self.io = io
         if self.io is not None:
             self.io.append(self)
-    
+
     def activate(self):
         """Pass control to the line. By default, lines return immediately. Subclasses may read input or do other things instead.
         """
         pass
-    
+
     def draw(self):
         """Draw the line's content into the line where the cursor is currently positioned.
         """
         if self.io is None:
             return
         print(self.io.terminal.move_x(0) + self.io.terminal.clear_eol, end='', flush=True)
-    
+
     def is_interactive(self):
         """Returns a boolean representing whether or not this line has an interactive mode.
-        
+
         If this returns False, the line will be skipped when moving up or down using the arrow keys.
         """
         return False
@@ -52,7 +51,7 @@ class StringLine(Line):
     def __init__(self, io, message=''):
         self.message = message
         super().__init__(io)
-    
+
     def draw(self):
         if self.io is None:
             return
@@ -78,7 +77,7 @@ class PrefixLine(StringLine):
             self.prefix = prefix
         self.prefix_color = prefix_color
         super().__init__(io, message=message)
-    
+
     def draw(self):
         if self.io.terminal.width < 3:
             print(self.io.terminal.move_x(0) + self.io.terminal.clear_eol, end='', flush=True)
@@ -90,7 +89,7 @@ class PrefixLine(StringLine):
             print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message, end='', flush=True)
         else:
             print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message + self.io.terminal.clear_eol, end='', flush=True)
-        
+
     def formatted_prefix(self):
         interactive = self.is_interactive()
         ret = self.io.terminal.bold('[') if interactive else '['
@@ -107,7 +106,7 @@ class InputLine(PrefixLine):
         self.position = 0
         self.submitted = False
         super().__init__(io, message=message, prefix=prefix, prefix_color=prefix_color)
-    
+
     def activate(self):
         if self.io is None or self.submitted:
             return
@@ -176,7 +175,7 @@ class InputLine(PrefixLine):
                     self.io.update()
             if self.io is None or self.submitted:
                 return
-    
+
     def draw(self):
         if self.io.terminal.width < 3:
             print(self.io.terminal.move_x(0) + self.io.terminal.clear_eol, end='', flush=True)
@@ -204,10 +203,10 @@ class InputLine(PrefixLine):
             print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message + self.io.terminal.bold(self.answer) + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
         else:
             print(self.io.terminal.move_x(0) + self.formatted_prefix() + self.message + self.io.terminal.bold(self.answer) + self.io.terminal.clear_eol + self.io.terminal.move_x(7 + len(self.message) + self.position), end='', flush=True)
-        
+
     def is_interactive(self):
         return not self.submitted
-    
+
     def join(self, update_interval=0.1):
         """Blocks until input has been submitted, then returns that input.
         """
@@ -226,18 +225,18 @@ class TaskLine(PrefixLine):
         self.state = None
         self.prefix_formatter = lambda x: x
         super().__init__(io, message=message, prefix='....')
-    
+
     def draw(self):
         self.update_progress()
         super().draw()
-    
+
     def formatted_prefix(self):
         interactive = self.is_interactive()
         ret = self.io.terminal.bold('[') if interactive else '['
         ret += self.prefix_formatter(self.prefix)
         ret += self.io.terminal.bold(']') if interactive else ']'
         return ret + ' '
-    
+
     def join(self, update_interval=0.1):
         try:
             self.thread.start()
@@ -254,10 +253,10 @@ class TaskLine(PrefixLine):
         self.update_progress(progress=1.0)
         if self.io is not None:
             self.io.update()
-    
+
     def start(self):
         self.thread.start()
-    
+
     def update_progress(self, progress=None, state=None):
         if progress is not None:
             self.progress = progress
@@ -296,7 +295,7 @@ class SleepLine(TaskLine):
                 self.progress = 0.0
                 self.state = None
                 super().__init__()
-            
+
             def run(self):
                 if self.delta <= 0:
                     self.progress = 1.0
@@ -304,20 +303,20 @@ class SleepLine(TaskLine):
                 for progress in range(5):
                     time.sleep(self.delta / 5)
                     self.progress = (progress + 1) / 5
-        
-        if isinstance(end, datetime):
+
+        if isinstance(end, datetime.datetime):
             # sleep until datetime
-            thread = SleepThread(delta=(end - datetime.utcnow()))
+            thread = SleepThread(delta=(end - datetime.datetime.now(datetime.timezone.utc)))
             if message is None:
-                if end.date() == date.today():
+                if end.date() == datetime.date.today():
                     date_string = end.strftime('%H:%M:%S')
                 else:
                     date_string = end.strftime('%Y-%m-%d %H:%M:%S')
                 message = 'sleeping until ' + date_string
         else:
             # sleep for time interval
-            if not isinstance(end, timedelta):
-                end = timedelta(seconds=end)
+            if not isinstance(end, datetime.timedelta):
+                end = datetime.timedelta(seconds=end)
             thread = SleepThread(delta=end)
             if message is None:
                 if end.total_seconds() >= 86400:
@@ -345,20 +344,20 @@ class IO:
         self.active_line = None
         self.update_lock = threading.Lock()
         self._getch = None
-    
+
     def __contains__(self, item):
         return item in self.lines
-    
+
     def __delitem__(self, key):
         if key < self.max_lines - self.terminal.height:
             raise IndexError('Line has scrolled out of screen')
         del self.lines[key]
         self.update()
-    
+
     def __enter__(self):
         self._getch = _getch()
         return self
-    
+
     def __exit__(self, exception_type, exception_val, trace):
         """Update everything and print a newline after the last line
         """
@@ -369,20 +368,20 @@ class IO:
             print(flush=True)
         del self._getch
         return exception_type is None # re-raise any exceptions
-    
+
     def __getitem__(self, key):
         return self.lines[key]
-    
+
     def __iter__(self):
         return iter(self.lines)
-    
+
     def __len__(self):
         return len(self.lines)
-    
+
     def __setitem__(self, key, value):
         self.lines[key] = value
         self.update()
-    
+
     def activate(self, line):
         if (line is None) or (line in self):
             self.active_line = line
@@ -393,7 +392,7 @@ class IO:
                 self.activate(None)
         else:
             raise ValueError()
-    
+
     def activate_down(self):
         prev_active_line = self.active_line
         for line in (self.lines if self.active_line is None else self.lines[self.index(self.active_line) + 1:]):
@@ -402,7 +401,7 @@ class IO:
                 self.active_line = prev_active_line
                 return True
         return False
-    
+
     def activate_up(self):
         prev_active_line = self.active_line
         for line in reversed(self.lines if self.active_line is None else self.lines[:self.index(self.active_line)]):
@@ -411,20 +410,20 @@ class IO:
                 self.active_line = prev_active_line
                 return True
         return False
-    
+
     def append(self, line):
         self.lines.append(line)
         self.update()
-    
+
     def clear(self):
         """Delete all lines.
         """
         self.lines = []
         self.update()
-    
+
     def do(self, func, message='working', args=[], kwargs={}, update_interval=0.1, block=True):
         """Execute the function in a thread and display the message.
-        
+
         If block is true, this method blocks until the function returns.
         """
         thread = threading.Thread(target=func, args=args[:], kwargs=kwargs.copy())
@@ -435,44 +434,44 @@ class IO:
             line.join(update_interval=update_interval)
         else:
             threading.Thread(target=line.join, kwargs={'update_interval': update_interval}).start()
-    
+
     def getch(self):
         return next(self._getch)
-    
+
     def index(self, line):
         return self.lines.index(line)
-    
+
     def input(self, prompt='', prefix='????'):
         """Display the prompt and listen for newline-terminated input on stdin.
         """
         line = InputLine(self, message=prompt, prefix=prefix)
         self.activate(line)
         return line.join()
-    
+
     def insert(self, position, line):
         self.lines.insert(position, line)
         self.update()
-    
+
     def move_down(self):
         print(flush=True)
         self.position += 1
         if self.position == self.max_lines:
             self.max_lines += 1
-    
+
     def move_up(self):
         if self.position <= 0 or self.max_lines - self.position >= self.terminal.height:
             raise IndexError()
         else:
             self.position -= 1
             print(self.terminal.move_up, end='', flush=True)
-    
+
     def print(self, *args, sep=' ', end='\n', file=None, flush=False, prefix='**'):
         """Print the values to a new StringLine after the existing lines.
-        
+
         Designed to be compatible with the built-in function "print". However, all keyword arguments other than "sep" and "prefix" are ignored.
         """
         PrefixLine(self, message=sep.join(str(arg) for arg in args), prefix=prefix)
-    
+
     def update(self):
         with self.update_lock:
             self.max_lines = max(self.max_lines, len(self))
